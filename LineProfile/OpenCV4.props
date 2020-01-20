@@ -1,0 +1,36 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+
+    <!-- OpenCV4.0.1 32 位 VS2015 头文件目录 -->
+    <IncludePath Condition="'$(Platform)'=='Win32'">$(OPENCV_PATH_4_0_1_X86_VC14)\..\..\include;$(IncludePath)</IncludePath>
+
+    <!-- OpenCV4.0.1 32 位 VS2015 库文件目录 -->
+    <LibraryPath Condition="'$(Platform)'=='Win32'">$(OPENCV_PATH_4_0_1_X86_VC14)\lib;$(LibraryPath)</LibraryPath>
+
+    <!-- OpenCV4.1.0 64 位 VS2017 头文件目录 -->
+    <IncludePath Condition="'$(Platform)'=='x64'">$(OPENCV_PATH_4_1_0_X64_VC15)\..\..\include;$(IncludePath)</IncludePath>
+
+    <!-- OpenCV4.1.0 64 位 VS2017 库文件目录 -->
+    <LibraryPath Condition="'$(Platform)'=='x64'">$(OPENCV_PATH_4_1_0_X64_VC15)\lib;$(LibraryPath)</LibraryPath>
+
+  </PropertyGroup>
+  <ItemDefinitionGroup>
+    <Link>
+
+      <!-- 32位链接的debug lib文件 -->
+      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">opencv_world401d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+
+      <!-- 32位链接的release lib文件 -->
+      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">opencv_world401.lib;%(AdditionalDependencies)</AdditionalDependencies>
+
+      <!-- 64位链接的debug lib文件 -->
+      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">opencv_world410d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+
+      <!-- 64位链接的release lib文件 -->
+      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Release|x64'">opencv_world410.lib;%(AdditionalDependencies)</AdditionalDependencies>
+
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemGroup />
+</Project>

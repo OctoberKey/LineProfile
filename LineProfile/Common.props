@@ -1,0 +1,25 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+
+    <!-- exe、dll、lib、pdb等文件输出的目录 -->
+    <OutDir>$(SolutionDir)Bin\$(Platform)\</OutDir>
+
+    <!-- obj等中间文件输出的目录            -->
+    <IntDir>$(SolutionDir)Tmp\$(ProjectName)\$(Platform)\$(Configuration)\</IntDir>
+
+    <!-- 输出文件的文件名                   -->
+    <TargetName Condition="'$(Configuration)'=='Debug'">$(ProjectName)d</TargetName>
+    <TargetName Condition="'$(Configuration)'=='Release'">$(ProjectName)</TargetName>
+
+    <!-- 调试的工作目录   -->
+    <LocalDebuggerWorkingDirectory>$(OutDir)</LocalDebuggerWorkingDirectory>
+
+    <!-- 选择本机调试     -->
+    <DebuggerFlavor>WindowsLocalDebugger</DebuggerFlavor>
+
+    <!-- 可以修改系统PATH -->
+    <LocalDebuggerEnvironment>PATH=%PATH%</LocalDebuggerEnvironment> 
+
+  </PropertyGroup>
+</Project>

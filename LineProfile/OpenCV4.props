@@ -9,10 +9,10 @@
     <LibraryPath Condition="'$(Platform)'=='Win32'">$(OPENCV_PATH_4_0_1_X86_VC14)\lib;$(LibraryPath)</LibraryPath>
 
     <!-- OpenCV4.1.0 64 位 VS2017 头文件目录 -->
-    <IncludePath Condition="'$(Platform)'=='x64'">$(OPENCV_PATH_4_1_0_X64_VC15)\..\..\include;$(IncludePath)</IncludePath>
+    <IncludePath Condition="'$(Platform)'=='x64'">$(OPENCV_PATH)\..\..\include;$(IncludePath)</IncludePath>
 
     <!-- OpenCV4.1.0 64 位 VS2017 库文件目录 -->
-    <LibraryPath Condition="'$(Platform)'=='x64'">$(OPENCV_PATH_4_1_0_X64_VC15)\lib;$(LibraryPath)</LibraryPath>
+    <LibraryPath Condition="'$(Platform)'=='x64'">$(OPENCV_PATH)\lib;$(LibraryPath)</LibraryPath>
 
   </PropertyGroup>
   <ItemDefinitionGroup>
@@ -25,10 +25,10 @@
       <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">opencv_world401.lib;%(AdditionalDependencies)</AdditionalDependencies>
 
       <!-- 64位链接的debug lib文件 -->
-      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">opencv_world410d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">opencv_world412d.lib;%(AdditionalDependencies)</AdditionalDependencies>
 
       <!-- 64位链接的release lib文件 -->
-      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Release|x64'">opencv_world410.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies Condition="'$(Configuration)|$(Platform)'=='Release|x64'">opencv_world412.lib;%(AdditionalDependencies)</AdditionalDependencies>
 
     </Link>
   </ItemDefinitionGroup>

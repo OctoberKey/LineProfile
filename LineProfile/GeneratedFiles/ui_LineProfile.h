@@ -1,7 +1,7 @@
 /********************************************************************************
 ** Form generated from reading UI file 'LineProfile.ui'
 **
-** Created by: Qt User Interface Compiler version 5.12.4
+** Created by: Qt User Interface Compiler version 5.14.0
 **
 ** WARNING! All changes made in this file will be lost when recompiling UI file!
 ********************************************************************************/
@@ -52,7 +52,7 @@ public:
 
     void retranslateUi(QMainWindow *LineProfileClass)
     {
-        LineProfileClass->setWindowTitle(QApplication::translate("LineProfileClass", "LineProfile", nullptr));
+        LineProfileClass->setWindowTitle(QCoreApplication::translate("LineProfileClass", "LineProfile", nullptr));
     } // retranslateUi
 
 };

@@ -15,20 +15,20 @@ cv::Point2f rotate(const cv::Point2f& pt, const cv::Mat& rotM)
 }
 
 cv::Point2f rotate(const cv::Point2f& pt,
-                   double a00, double a01, double a02,
-                   double a10, double a11, double a12)
+  double a00, double a01, double a02,
+  double a10, double a11, double a12)
 {
   return cv::Point2f(a00 * pt.x + a01 * pt.y + a02 * 1,
-                 a10 * pt.x + a11 * pt.y + a12 * 1);
+    a10 * pt.x + a11 * pt.y + a12 * 1);
 }
 
 void func(cv::Mat& src,                 /* 输入图像 */
-          const cv::RotatedRect& rect//,  /* ROI区域 */
-          /*bool reverse,                 /* 是否顺这ROI角度 */
-          /*bool w2b,                     /* 白到黑 */
-          /*float segmentHalfSize,        /* 搜索线的半宽 */
-          /*float movement,               /* 搜索线间距 */
-          /*float offset                  /* 起始偏移量 */
+  const cv::RotatedRect& rect,  /* ROI区域 */
+  /*bool reverse,                 /* 是否顺这ROI角度 */
+  /*bool w2b,                     /* 白到黑 */
+  float segmentWidth,           /* 搜索线的宽 */
+  float movement,               /* 搜索线间距 */
+  float offset                  /* 起始偏移量 */
 )
 {
   // 假设一条横线进行了反向旋转后变成了ROI的中心横线
@@ -42,16 +42,40 @@ void func(cv::Mat& src,                 /* 输入图像 */
 
   cv::Point2f lMid(rect.center.x - rect.size.width / 2, rect.center.y);
   cv::Point2f rMid(rect.center.x + rect.size.width / 2, rect.center.y);
-  lMid = rotate(lMid, a00, a01, a02, a10, a11, a12);
-  rMid = rotate(lMid, a00, a01, a02, a10, a11, a12);
 
   double left = rect.center.x - rect.size.width / 2;
   double right = rect.center.x + rect.size.width / 2;
+  double top = rect.center.y - rect.size.height / 2;
+  double bottom = rect.center.y + rect.size.height / 2;
+  double height = rect.size.height;
+  double width = rect.size.width;
+  
+  /*
+    中间：offset + segmentWidth / 2 + movement * n
+    起始：offset + movement * n
+    中止：offset + movement * n + segmentWidth - 1
+    offset + movement * n + segmentWidth - 1 = height - 1
+    n = (height - offset - segmentWidth) / movement
+   */
+  int segmentCnt = (height - offset - segmentWidth) / movement + 1;
+  cv::Mat rowSignal = cv::Mat::zeros(1, height, CV_8UC1);
+  uchar* pn = &rowSignal.ptr<uchar>(0)[0];
+  for (int n = 0; n < segmentCnt; ++n)
+  {
+    for (int row = offset + movement * n; row < offset + movement * n + segmentWidth; ++row)
+    {
+      pn[row] = 1;
+    }
+  }
+
   cv::Mat line = cv::Mat::zeros(rect.size, CV_32FC4);
   cv::Point2f pt;
-  for (int row = 0; row < rect.size.height / 2; row++)
+  for (int row = 0; row < rect.size.height; row++)
   {
-    cv::Vec4d* p = line.ptr<cv::Vec4d>(row);
+    if (*pn++ == 0)
+      continue;
+
+    cv::Vec4f* p = line.ptr<cv::Vec4f>(row);
     for (int col = 0; col < rect.size.width; col++)
     {
       double x = left + col;
@@ -59,7 +83,7 @@ void func(cv::Mat& src,                 /* 输入图像 */
 
       pt.x = x;
       pt.y = y;
-      pt = rotate(lMid, a00, a01, a02, a10, a11, a12);
+      pt = rotate(pt, a00, a01, a02, a10, a11, a12);
       //pt = rotate(lMid, matrix);
 
       p[col][0] = pt.x;
@@ -76,11 +100,11 @@ void func(cv::Mat& src,                 /* 输入图像 */
         cv::Mat x_m = (cv::Mat_<double>(1, 2) << 1 - (x - x1), x - x1);
         cv::Mat y_m = (cv::Mat_<double>(2, 1) << 1 - (y - y1), y - y1);
         cv::Mat v_m = (cv::Mat_<double>(2, 2) <<
-                       *src.ptr<uchar>(y1, x1),
-                       *src.ptr<uchar>(y2, x1),
-                       *src.ptr<uchar>(y1, x2),
-                       *src.ptr<uchar>(y2, x2)
-                       );
+          *src.ptr<uchar>(y1, x1),
+          *src.ptr<uchar>(y2, x1),
+          *src.ptr<uchar>(y1, x2),
+          *src.ptr<uchar>(y2, x2)
+          );
         cv::Mat mm = x_m * v_m * y_m;
         line.ptr<cv::Vec3d>(row)[col][2] = mm.at<double>(0, 0);
 #else
@@ -96,27 +120,27 @@ void func(cv::Mat& src,                 /* 输入图像 */
       }
       else
       {
-        line.ptr<cv::Vec4d>(row)[col][2] = std::numeric_limits<double>::quiet_NaN();
+        line.ptr<cv::Vec4f>(row)[col][2] = std::numeric_limits<double>::quiet_NaN();
       }
     }
   }
 }
 
-LineProfile::LineProfile(QWidget *parent)
+LineProfile::LineProfile(QWidget* parent)
   : QMainWindow(parent)
 {
   ui.setupUi(this);
 
   cv::TickMeter tm;
   tm.start();
-  cv::Mat src = cv::imread(R"(5-.bmp)", cv::IMREAD_UNCHANGED);
+  cv::Mat src = cv::imread(R"(test.bmp)", cv::IMREAD_UNCHANGED);
   tm.stop();
   double ms = tm.getTimeMilli();
 
   QMessageBox::information(this, "", QString::number(ms));
 
   tm.start();
-  func(src, cv::RotatedRect(cv::Point2f(1840, 1130), cv::Size2f(800, 800), 5));
+  func(src, cv::RotatedRect(cv::Point2f(1840, 1130), cv::Size2f(800, 800), 5), 3, 5, 0);
   tm.stop();
   ms = tm.getTimeMilli();
 

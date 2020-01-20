@@ -142,7 +142,7 @@
     <None Include="OpenCV4.props" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\Bin\x64\5-.bmp" />
+    <Image Include="5-.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Condition="Exists('$(QtMsBuild)\qt.targets')">

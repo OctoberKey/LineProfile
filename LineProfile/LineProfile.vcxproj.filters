@@ -68,6 +68,6 @@
     <None Include="OpenCV4.props" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="..\Bin\x64\5-.bmp" />
+    <Image Include="5-.bmp" />
   </ItemGroup>
 </Project>

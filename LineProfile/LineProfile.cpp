@@ -116,12 +116,12 @@ public:
       }
     }
 
-    cv::Mat matrix = cv::getRotationMatrix2D(roi.center, -roi.angle, 1.0);
+    _matrix = cv::getRotationMatrix2D(_roi.center, -_roi.angle, 1.0);
     for (int row = 0; row < _heightRoi; ++row)
     {
       for (int col = 0; col < _widthRoi; ++col)
       {
-        cv::Point2f pt = rotate(_leftRoi + col, _topRoi + row, matrix);
+        cv::Point2f pt = rotate(_leftRoi + col, _topRoi + row, _matrix);
         _pos.ptr<cv::Vec2f>(row)[col][0] = pt.x;
         _pos.ptr<cv::Vec2f>(row)[col][1] = pt.y;
       }
@@ -130,6 +130,9 @@ public:
 
   void process(const cv::Mat& src)
   {
+    //cv::Mat dst = src.clone();
+    //cv::cvtColor(dst, dst, cv::COLOR_GRAY2BGRA);
+
     float maxVal = std::numeric_limits<float>::lowest();
     for (int row = 0; row < _heightRoi; ++row)
     {
@@ -274,49 +277,85 @@ public:
         for (int col = _widthRoi - 2; col > 0; --col)
         {
           float v = _derivative.ptr<float>(row)[col];
-          float v_m1 = _derivative.ptr<float>(row)[col - 1];
-          float v_p1 = _derivative.ptr<float>(row)[col + 1];
-          // 明到暗，倒数为负数
+          float v_prev = _derivative.ptr<float>(row)[col + 1];
+          float v_next = _derivative.ptr<float>(row)[col - 1];
+          // 明到暗，导数为负数
           if (_transitionDirection == 0)
           {
-            if (v < -_threshold && v <= v_m1 && v <= v_p1)
+            if (v < -_threshold * (1 - 5 / 100.0) && v <= v_prev && v <= v_next)
             {
-              _peakIndex.ptr<cv::Vec3f>(row)[0][0] += 1;
-              int i = (int)(_peakIndex.ptr<cv::Vec3f>(row)[0][0] + 0.5);
-
               //////////////////////////////////////////////////////////////////////////
-              double x1 = col - 1;
+              // 三点拟合抛物线，计算顶点，作为峰值点
+              double x1 = col + 1;
               double x2 = col;
-              double x3 = col + 1;
-              double y1 = v_m1;
+              double x3 = col - 1;
+              double y1 = v_prev;
               double y2 = v;
-              double y3 = v_p1;
+              double y3 = v_next;
               double x0;
               double y0;
 
-              if (y2 == y1 || y2 == y3)
+              // 三点相同，以第一点为峰值点
+              if (y2 == y1 && y2 == y3)
               {
-                x0 = x2;
-                y0 = y2;
+                x0 = x1;
+                y0 = y1;
               }
               else
               {
+                /*
+                oo
+                  o
+                */
+                if (y2 == y1)
+                {
+                  y1 = y3;
+                }
+                /*
+                 oo
+                o
+                */
+                if (y2 == y3)
+                {
+                  y3 = y1;
+                }
+
                 double a = -((x1 - x2) * (y3 - y1) - (x3 - x1) * (y1 - y2)) / ((x1 - x2) * (x2 - x3) * (x3 - x1));
                 double b = (y1 - y2 - a * (x1 * x1 - x2 * x2)) / (x1 - x2);
                 double c = y1 - a * x1 * x1 - b * x1;
                 x0 = -b / (2 * a);
                 y0 = (4 * a * c - b * b) / (4 * a);
-                qDebug() << x0 << "," << y0;
               }
-              _peakIndex.ptr<cv::Vec3f>(row)[i][0] = x0;
-              _peakIndex.ptr<cv::Vec3f>(row)[i][1] = y0;
+              //////////////////////////////////////////////////////////////////////////
+              if (y0 <= _threshold)
+              {
+                _peakIndex.ptr<cv::Vec3f>(row)[0][0] += 1;
+                int i = (int)(_peakIndex.ptr<cv::Vec3f>(row)[0][0] + 0.5);
+
+                cv::Point2f pt = rotate(_leftRoi + x0, _topRoi + row, _matrix);
+                _peakIndex.ptr<cv::Vec3f>(row)[i][0] = pt.x;
+                _peakIndex.ptr<cv::Vec3f>(row)[i][1] = pt.y;
+                _peakIndex.ptr<cv::Vec3f>(row)[i][2] = y0;
+
+                //if (_peakIndex.ptr<cv::Vec3f>(row)[0][0] == 1)
+                {
+                  if (n > 0)
+                  {
+                    //cv::line(dst, pt, cv::Point(_peakIndex.ptr<cv::Vec3f>(row-_step)[i][0], _peakIndex.ptr<cv::Vec3f>(row-_step)[i][1]),
+                    //         cv::Scalar(0, 255, 0, 128), 1, cv::LINE_AA);
+                  }
+                  // TODO: LineSegmentDetector
+                  //cv::drawMarker(dst, pt, cv::Scalar(0, 255, 0, 128), cv::MARKER_TILTED_CROSS, 5);
+                }
+              }
+
               //////////////////////////////////////////////////////////////////////////
             }
           }
-          // 暗到明，倒数为正数
+          // 暗到明，导数为正数
           else
           {
-            if (v > +_threshold && v >= v_m1 && v >= v_p1)
+            if (v > +_threshold && v >= v_prev && v >= v_next)
             {
               int i = ++_peakIndex.ptr<ushort>(row)[0];
               _peakIndex.ptr<ushort>(row)[i] = col;
@@ -383,6 +422,9 @@ protected:
   // 
   cv::Mat _peakIndex;
   // TODO: 增加边缘感度，百分比，比阈值小，抛物线顶点比阈值大
+  int edgeSense = 5;
+  //
+  cv::Mat _matrix;
 };
 
 cv::Mat func(cv::Mat& src,                 /* 输入图像 */
@@ -615,7 +657,7 @@ LineProfile::LineProfile(QWidget* parent)
 
   tm.reset();
   tm.start();
-  d.init(src.cols, src.rows, roi, 1, 0, 3, 0, 3, -1, 80, 3, 0.8);
+  d.init(src.cols, src.rows, roi, 1, 0, 3, 0, 3, -1, 100, 3, 0.8);
   tm.stop();
   ms = tm.getTimeMilli();
   qDebug() << "LineEdgeDectector::init " << ms << " ms";

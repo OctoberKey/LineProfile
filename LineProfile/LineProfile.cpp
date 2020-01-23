@@ -28,6 +28,247 @@ cv::Point2f rotate(const cv::Point2f& pt,
                      a10 * pt.x + a11 * pt.y + a12 * 1);
 }
 
+inline void mean_xy(const std::vector<cv::Point2f> &line, double &mean_x, double &mean_y)
+{
+  int size = line.size();
+  mean_x = 0.0;
+  mean_y = 0.0;
+  for (int i = 0; i < size; i++)
+  {
+    mean_x += line[i].x;
+    mean_y += line[i].y;
+  }
+  mean_x /= size;
+  mean_y /= size; //至此，计算出了 x y 的均值
+}
+
+inline void weightedMean_xy(const std::vector<cv::Point2f> &line,
+                            double &mean_x, double &mean_y,
+                            double tau, double a, double b, double c)
+{
+  int size = line.size();
+  mean_x = 0.0;
+  mean_y = 0.0;
+  double sum_wx = 0, sum_wy = 0, sum_w = 0;
+  for (int i = 0; i < size; i++)
+  {
+    double x = line[i].x, y = line[i].y;
+    double d = abs(a * x + b * y + c);
+    double w = d < tau ? 1 : tau / d;
+    sum_wx += w * w * x;
+    sum_wy += w * w * y;
+    sum_w += w * w;
+  }
+  mean_x = sum_wx / sum_w;
+  mean_y = sum_wy / sum_w; //至此，计算出了 x y 的均值
+}
+inline void Dxxyyxy(const std::vector<cv::Point2f> &line,
+                    double mx, double my,
+                    double &Dxx, double &Dxy, double &Dyy)
+{
+  int size = line.size();
+  for (int i = 0; i < size; i++)
+  {
+    double x = line[i].x;
+    double y = line[i].y;
+    Dxx += (x - mx) * (x - mx);
+    Dxy += (x - mx) * (y - my);
+    Dyy += (y - my) * (y - my);
+  }
+}
+inline void weightedDxxxyyy(const std::vector<cv::Point2f> &line,
+                            double mx, double my,
+                            double &Dxx, double &Dxy, double &Dyy,
+                            double tau, double a, double b, double c)
+{
+  int size = line.size();
+  for (int i = 0; i < size; i++)
+  {
+    double x = line[i].x, y = line[i].y;
+    double d = abs(a * x + b * y + c);
+    double w = d < tau ? 1 : tau / d;
+    w = w * w;
+    Dxx += w * (x - mx) * (x - mx);
+    Dxy += w * (x - mx) * (y - my);
+    Dyy += w * (y - my) * (y - my);
+  }
+}
+
+/**
+ * @brief lineFit 最小二乘法拟合 ax + by + c = 0 型直线.
+ *  参数 a 和 b 满足 a^2 + b^2 = 1。拟合的判据是点到直线的垂直距离平方和最小。不是通常意义下的一元线性回归。
+ * @param points 点的坐标
+ * @param [out] a 输出拟合系数
+ * @param [out] b 输出拟合系数
+ * @param [out] c 输出拟合系数
+ */
+bool lineFit(const std::vector<cv::Point2f> &points, double &a, double &b, double &c)
+{
+  int size = points.size();
+  if (size == 0)
+  {
+    a = 0;
+    b = 0;
+    c = 0;
+    return false;
+  }
+  double x_mean = 0;
+  double y_mean = 0;
+  mean_xy(points, x_mean, y_mean);
+
+  double Dxx = 0, Dxy = 0, Dyy = 0;
+  Dxxyyxy(points, x_mean, y_mean, Dxx, Dxy, Dyy);
+
+  double lambda = ((Dxx + Dyy) - sqrt((Dxx - Dyy) * (Dxx - Dyy) + 4 * Dxy * Dxy)) / 2.0;
+  double den = sqrt(Dxy * Dxy + (lambda - Dxx) * (lambda - Dxx));
+
+  if (fabs(den) < 1e-5)
+  {
+    if (fabs(Dxx / Dyy - 1) < 1e-5) //这时没有一个特殊的直线方向，无法拟合
+    {
+      return false;
+    }
+    else
+    {
+      a = 1;
+      b = 0;
+      c = -x_mean;
+    }
+  }
+  else
+  {
+    a = Dxy / den;
+    b = (lambda - Dxx) / den;
+    c = -a * x_mean - b * y_mean;
+  }
+  return true;
+}
+
+#if 0
+bool weightedLineFitOneStep(const std::vector<cv::Point2f> &line, double &a, double &b, double &c, double tau)
+{
+  int size = line.size();
+  if (size == 0)
+  {
+    a = 0;
+    b = 0;
+    c = 0;
+    return false;
+  }
+  double x_mean = 0;
+  double y_mean = 0;
+  weightedMean_xy(line, x_mean, y_mean, tau, a, b, c);
+  double Dxx = 0, Dxy = 0, Dyy = 0;
+  weightedDxxxyyy(line, x_mean, y_mean, Dxx, Dxy, Dyy, tau, a, b, c);
+
+  double lambda = ((Dxx + Dyy) - sqrt((Dxx - Dyy) * (Dxx - Dyy) + 4 * Dxy * Dxy)) / 2.0;
+  double den = sqrt(Dxy * Dxy + (lambda - Dxx) * (lambda - Dxx));
+
+  if (fabs(den) < 1e-5)
+  {
+    if (fabs(Dxx / Dyy - 1) < 1e-5) //这时没有一个特殊的直线方向，无法拟合
+    {
+      return false;
+    }
+    else
+    {
+      a = 1;
+      b = 0;
+      c = -a * x_mean - b * y_mean;
+    }
+  }
+  else
+  {
+    a = Dxy / den;
+    b = (lambda - Dxx) / den;
+    c = -a * x_mean - b * y_mean;
+  }
+  return true;
+}
+
+bool weightedLineFit(const std::vector<cv::Point2f> &line, double &a, double &b, double &c, double tau, int N)
+{
+  bool ret;
+  ret = lineFit(line, a, b, c);
+  if (!ret) return false;
+  for (int i = 0; i < N; i++)
+  {
+    ret = weightedLineFitOneStep(line, a, b, c, tau);
+    if (!ret) return false;
+  }
+  return true;
+}
+#else
+bool weightedLineFitOneStep(const std::vector<cv::Point2f> &line, float &a, float &b, float &c, float tau)
+{
+  int size = line.size();
+  if (size == 0)
+  {
+    a = 0;
+    b = 0;
+    c = 0;
+    return false;
+  }
+  double x_mean = 0;
+  double y_mean = 0;
+  weightedMean_xy(line, x_mean, y_mean, tau, a, b, c);
+  double Dxx = 0, Dxy = 0, Dyy = 0;
+  weightedDxxxyyy(line, x_mean, y_mean, Dxx, Dxy, Dyy, tau, a, b, c);
+
+  double lambda = ((Dxx + Dyy) - sqrt((Dxx - Dyy) * (Dxx - Dyy) + 4 * Dxy * Dxy)) / 2.0;
+  double den = sqrt(Dxy * Dxy + (lambda - Dxx) * (lambda - Dxx));
+
+  if (fabs(den) < 1e-5)
+  {
+    if (fabs(Dxx / Dyy - 1) < 1e-5) //这时没有一个特殊的直线方向，无法拟合
+    {
+      return false;
+    }
+    else
+    {
+      a = 1;
+      b = 0;
+      c = -a * x_mean - b * y_mean;
+    }
+  }
+  else
+  {
+    a = Dxy / den;
+    b = (lambda - Dxx) / den;
+    c = -a * x_mean - b * y_mean;
+  }
+  return true;
+}
+
+bool weightedLineFit(const std::vector<cv::Point2f> &line, float &a, float &b, float &c, float tau, int N)
+{
+  bool ret = true;
+  cv::Vec4f lineFit;
+
+  if (line.size() == 0)
+    return false;
+
+  cv::fitLine(line, lineFit, 7, 0, 1e-2, 1e-2);
+  a = lineFit[1];
+  b = -lineFit[0];
+  c = lineFit[0] * lineFit[3] - lineFit[1] * lineFit[2];
+
+  //if (!ret) return false;
+  for (int i = 0; i < N; i++)
+  {
+    double a1 = a, b1 = b, c1 = c;
+    ret = weightedLineFitOneStep(line, a, b, c, tau);
+    if (std::abs(a1 - a) < std::numeric_limits<float>::epsilon() &&
+        std::abs(b1 - b) < std::numeric_limits<float>::epsilon() &&
+        std::abs(c1 - c) < std::numeric_limits<float>::epsilon())
+      break;
+
+    if (!ret) return false;
+  }
+  return true;
+}
+#endif
+//
 class LineEdgeDectector
 {
 public:
@@ -77,6 +318,8 @@ public:
     _heightImage = height;
     _roi = roi;
     _widthRoi = _roi.size.width;
+    if (_widthRoi < 3)
+      _widthRoi = 3;
     _heightRoi = _roi.size.height;
     _leftRoi = _roi.center.x - _widthRoi / 2;
     _topRoi = _roi.center.y - _heightRoi / 2;
@@ -116,6 +359,7 @@ public:
       }
     }
 
+    // 沿着搜索方向的插值点
     _matrix = cv::getRotationMatrix2D(_roi.center, -_roi.angle, 1.0);
     for (int row = 0; row < _heightRoi; ++row)
     {
@@ -126,14 +370,42 @@ public:
         _pos.ptr<cv::Vec2f>(row)[col][1] = pt.y;
       }
     }
+    _centerRoi = _roi.center;
+    _rightMidRoi = rotate(_leftRoi + _widthRoi - 1, _topRoi + _heightRoi / 2., _matrix);
+
+    _indexForPeakCheck = new int[_widthRoi * 2];//std::make_unique<int>(_widthRoi * 2);
+    for (int i = 0; i < _widthRoi; ++i)
+    {
+      _indexForPeakCheck[i] = i;
+    }
+    for (int i = _widthRoi; i < _widthRoi * 2; ++i)
+    {
+      _indexForPeakCheck[i] = _widthRoi * 2 - i - 1;
+    }
   }
 
   void process(const cv::Mat& src)
   {
-    //cv::Mat dst = src.clone();
-    //cv::cvtColor(dst, dst, cv::COLOR_GRAY2BGRA);
+#ifndef NDEBUG
+    dst = src.clone();
+    cv::cvtColor(dst, dst, cv::COLOR_GRAY2BGRA);
+    {
+      cv::Point2f pts[4];
+      _roi.points(pts); // bottomLeft, topLeft, topRight, bottomRight.
+      cv::line(dst, pts[0], pts[1], cv::Scalar(0, 0, 255, 128), 5);
+      cv::line(dst, pts[1], pts[2], cv::Scalar(0, 0, 255, 128), 5);
+      cv::line(dst, pts[2], pts[3], cv::Scalar(0, 0, 255, 128), 5);
+      cv::line(dst, pts[3], pts[0], cv::Scalar(0, 0, 255, 128), 5);
+    }
+    cv::arrowedLine(dst, _centerRoi, _rightMidRoi, cv::Scalar(0, 0, 255, 128), 5);
+#endif // !NDEBUG
 
-    float maxVal = std::numeric_limits<float>::lowest();
+    _v = 0;
+    _mean = 0;
+    _filtered = 0;
+    _derivative = 0;
+    _peakIndex = 0;
+
     for (int row = 0; row < _heightRoi; ++row)
     {
       for (int col = 0; col < _widthRoi; ++col)
@@ -236,134 +508,145 @@ public:
       }
     }
 
-    // 顺着角度方向
-    if (_traceDirection == 0)
+    // 整理导数
+    for (int n = 0; n < _segmentCount; ++n)
     {
-      for (int n = 0; n < _segmentCount; ++n)
+      int row = _startOffset + _step * n + _segmentWidth / 2;
+      for (int i = 1; i < _widthRoi - 1; ++i)
       {
-        int row = _startOffset + _step * n + _segmentWidth / 2;
-        for (int col = 1; col < _widthRoi - 1; ++col)
+        int col = _indexForPeakCheck[i + _widthRoi * _traceDirection];
+        float v = _derivative.ptr<float>(row)[col];
+        float v_prev = _derivative.ptr<float>(row)[col - 1];
+        float v_next = _derivative.ptr<float>(row)[col + 1];
+
+        if (_transitionDirection == 0 && v < -_threshold * (1 - 5 / 100.0) && v <= v_prev && v <= v_next || // 明到暗，导数为负数
+            _transitionDirection != 0 && v > +_threshold * (1 - 5 / 100.0) && v >= v_prev && v >= v_next)   // 暗到明，导数为正数
         {
-          float v = _derivative.ptr<float>(row)[col];
-          float v_m1 = _derivative.ptr<float>(row)[col - 1];
-          float v_p1 = _derivative.ptr<float>(row)[col + 1];
-          // 明到暗，倒数为负数
-          if (_transitionDirection == 0)
+          //////////////////////////////////////////////////////////////////////////
+          // 三点拟合抛物线，计算顶点，作为峰值点
+          double x1 = col - 1;
+          double x2 = col;
+          double x3 = col + 1;
+          double y1 = v_prev;
+          double y2 = v;
+          double y3 = v_next;
+          double x0;
+          double y0;
+
+          // 三点相同，以第一点为峰值点
+          if (y2 == y1 && y2 == y3)
           {
-            if (v < -_threshold && v <= v_m1 && v <= v_p1)
-            {
-              int i = ++_peakIndex.ptr<ushort>(row)[0];
-              _peakIndex.ptr<ushort>(row)[i] = col;
-            }
+            x0 = x1;
+            y0 = y1;
           }
-          // 暗到明，倒数为正数
           else
           {
-            if (v > +-_threshold && v >= v_m1 && v >= v_p1)
-            {
-              int i = ++_peakIndex.ptr<ushort>(row)[0];
-              _peakIndex.ptr<ushort>(row)[i] = col;
-            }
+            /* oo
+                 o */
+            if (y2 == y1)   y1 = y3;
+            /*  oo
+               o   */
+            if (y2 == y3)   y3 = y1;
+
+            /*
+              (1 * (y3 - y1) + 2 * (y1 - y2)) = 0
+              y3 - y1 + 2y1 - 2y2 = 0
+              y1 - 2y2 + y3 = 0
+              y1 + y3 = 2y2
+              y2 >= y1
+              y2 >= y3
+              不用考虑a为0的情况，因为不可能出现
+            */
+            double a = -((x1 - x2) * (y3 - y1) - (x3 - x1) * (y1 - y2)) / ((x1 - x2) * (x2 - x3) * (x3 - x1));
+            double b = (y1 - y2 - a * (x1 * x1 - x2 * x2)) / (x1 - x2);
+            double c = y1 - a * x1 * x1 - b * x1;
+            x0 = -b / (2 * a);
+            y0 = (4 * a * c - b * b) / (4 * a);
           }
+          //////////////////////////////////////////////////////////////////////////
+          if (std::abs(y0) >= std::abs(_threshold))
+          {
+            _peakIndex.ptr<cv::Vec3f>(row)[0][0] += 1;
+            int i = (int)(_peakIndex.ptr<cv::Vec3f>(row)[0][0] + 0.5);
+
+            cv::Point2f pt = rotate(_leftRoi + x0, _topRoi + row, _matrix);
+            _peakIndex.ptr<cv::Vec3f>(row)[i][0] = pt.x;
+            _peakIndex.ptr<cv::Vec3f>(row)[i][1] = pt.y;
+            _peakIndex.ptr<cv::Vec3f>(row)[i][2] = y0;
+
+#ifndef NDEBUG
+            cv::drawMarker(dst, pt, cv::Scalar(255, 0, 0, 128), cv::MARKER_TILTED_CROSS, 5, 3);
+#endif // !NDEBUG
+          }
+          //////////////////////////////////////////////////////////////////////////
         }
       }
     }
-    // 逆着角度方向
-    else
+
+    std::vector<cv::Point2f> pts;
+    for (int row = 0; row < _peakIndex.rows; ++row)
     {
-      for (int n = 0; n < _segmentCount; ++n)
+      int n = (int)(_peakIndex.ptr<cv::Vec3f>(row)[0][0] + 0.5);
+      if (n > 0)
       {
-        int row = _startOffset + _step * n + _segmentWidth / 2;
-        for (int col = _widthRoi - 2; col > 0; --col)
-        {
-          float v = _derivative.ptr<float>(row)[col];
-          float v_prev = _derivative.ptr<float>(row)[col + 1];
-          float v_next = _derivative.ptr<float>(row)[col - 1];
-          // 明到暗，导数为负数
-          if (_transitionDirection == 0)
-          {
-            if (v < -_threshold * (1 - 5 / 100.0) && v <= v_prev && v <= v_next)
-            {
-              //////////////////////////////////////////////////////////////////////////
-              // 三点拟合抛物线，计算顶点，作为峰值点
-              double x1 = col + 1;
-              double x2 = col;
-              double x3 = col - 1;
-              double y1 = v_prev;
-              double y2 = v;
-              double y3 = v_next;
-              double x0;
-              double y0;
-
-              // 三点相同，以第一点为峰值点
-              if (y2 == y1 && y2 == y3)
-              {
-                x0 = x1;
-                y0 = y1;
-              }
-              else
-              {
-                /*
-                oo
-                  o
-                */
-                if (y2 == y1)
-                {
-                  y1 = y3;
-                }
-                /*
-                 oo
-                o
-                */
-                if (y2 == y3)
-                {
-                  y3 = y1;
-                }
-
-                double a = -((x1 - x2) * (y3 - y1) - (x3 - x1) * (y1 - y2)) / ((x1 - x2) * (x2 - x3) * (x3 - x1));
-                double b = (y1 - y2 - a * (x1 * x1 - x2 * x2)) / (x1 - x2);
-                double c = y1 - a * x1 * x1 - b * x1;
-                x0 = -b / (2 * a);
-                y0 = (4 * a * c - b * b) / (4 * a);
-              }
-              //////////////////////////////////////////////////////////////////////////
-              if (y0 <= _threshold)
-              {
-                _peakIndex.ptr<cv::Vec3f>(row)[0][0] += 1;
-                int i = (int)(_peakIndex.ptr<cv::Vec3f>(row)[0][0] + 0.5);
-
-                cv::Point2f pt = rotate(_leftRoi + x0, _topRoi + row, _matrix);
-                _peakIndex.ptr<cv::Vec3f>(row)[i][0] = pt.x;
-                _peakIndex.ptr<cv::Vec3f>(row)[i][1] = pt.y;
-                _peakIndex.ptr<cv::Vec3f>(row)[i][2] = y0;
-
-                //if (_peakIndex.ptr<cv::Vec3f>(row)[0][0] == 1)
-                {
-                  if (n > 0)
-                  {
-                    //cv::line(dst, pt, cv::Point(_peakIndex.ptr<cv::Vec3f>(row-_step)[i][0], _peakIndex.ptr<cv::Vec3f>(row-_step)[i][1]),
-                    //         cv::Scalar(0, 255, 0, 128), 1, cv::LINE_AA);
-                  }
-                  // TODO: LineSegmentDetector
-                  //cv::drawMarker(dst, pt, cv::Scalar(0, 255, 0, 128), cv::MARKER_TILTED_CROSS, 5);
-                }
-              }
-
-              //////////////////////////////////////////////////////////////////////////
-            }
-          }
-          // 暗到明，导数为正数
-          else
-          {
-            if (v > +_threshold && v >= v_prev && v >= v_next)
-            {
-              int i = ++_peakIndex.ptr<ushort>(row)[0];
-              _peakIndex.ptr<ushort>(row)[i] = col;
-            }
-          }
-        }
+        float x = _peakIndex.ptr<cv::Vec3f>(row)[1][0];
+        float y = _peakIndex.ptr<cv::Vec3f>(row)[1][1];
+        pts.push_back(cv::Point2f(x, y));
       }
     }
+    /*
+    //参考https://blog.csdn.net/liyuanbhu/article/details/50866802
+    cv::Vec4f lineFit;
+    //cv::fitLine(pts, lineFit, 1, 0, 1e-2, 1e-2);
+    //cv::fitLine(pts, lineFit, 2, 0, 1e-2, 1e-2);
+    //cv::fitLine(pts, lineFit, 3, 0, 1e-2, 1e-2);
+    //cv::fitLine(pts, lineFit, 4, 0, 1e-2, 1e-2);
+    //cv::fitLine(pts, lineFit, 5, 0, 1e-2, 1e-2);
+    //cv::fitLine(pts, lineFit, 6, 0, 1e-2, 1e-2);
+    cv::fitLine(pts, lineFit, 7, 0, 1e-2, 1e-2);
+    {
+      float a = lineFit[1];
+      float b = -lineFit[0];
+      float c = lineFit[0] * lineFit[3] - lineFit[1] * lineFit[2];
+      // ax + by + c = 0
+      float y1 = 0;
+      float x1 = (-c - b * y1) / a;
+      float y2 = src.rows - 1;
+      float x2 = (-c - b * y2) / a;
+#ifndef NDEBUG
+      cv::line(dst, cv::Point2f(x1, y1), cv::Point2f(x2, y2), cv::Scalar(255, 0, 0, 128));
+#endif // !NDEBUG
+    }
+
+    {
+      double a, b, c;
+      ::lineFit(pts, a, b, c);
+      float y1 = 0;
+      float x1 = (-c - b * y1) / a;
+      float y2 = src.rows - 1;
+      float x2 = (-c - b * y2) / a;
+#ifndef NDEBUG
+      cv::line(dst, cv::Point2f(x1, y1), cv::Point2f(x2, y2), cv::Scalar(0, 255, 0, 128));
+#endif // !NDEBUG
+    }
+    */
+    {
+      float a, b, c;
+      weightedLineFit(pts, a, b, c, 3, 100);
+      float y1 = 0;
+      float x1 = (-c - b * y1) / a;
+      float y2 = src.rows - 1;
+      float x2 = (-c - b * y2) / a;
+#ifndef NDEBUG
+      cv::line(dst, cv::Point2f(x1, y1), cv::Point2f(x2, y2), cv::Scalar(0, 255, 0, 128), 3);
+      _a = a;
+      _b = b;
+      _c = c;
+#endif // !NDEBUG
+    }
+#ifndef NDEBUG
+    //cv::imwrite("result.bmp", dst);
+#endif // !NDEBUG
   }
 
 protected:
@@ -377,6 +660,8 @@ protected:
   int _heightRoi;
   float _leftRoi;
   float _topRoi;
+  cv::Point2f _rightMidRoi;
+  cv::Point2f _centerRoi;
   // 查找方向: 0 - ROI角度同方向; 1 - ROI角度反方向
   int _traceDirection;
   // 边缘类型: 0 - 明到暗; 1 - 暗到明
@@ -425,6 +710,15 @@ protected:
   int edgeSense = 5;
   //
   cv::Mat _matrix;
+  //
+  /*std::unique_ptr<int>*/int* _indexForPeakCheck;
+
+public:
+  cv::Mat dst;
+  float _a;
+  float _b;
+  float _c;
+
 };
 
 cv::Mat func(cv::Mat& src,                 /* 输入图像 */
@@ -644,28 +938,28 @@ LineProfile::LineProfile(QWidget* parent)
   double ms = tm.getTimeMilli();
   qDebug() << "cv::imread " << ms << " ms";
 
-  //for (int i = 0; i < 360; ++i)
+  for (int i = 0; i < 360; ++i)
   {
+    LineEdgeDectector d;
+    cv::RotatedRect roi(cv::Point2f(1840, 1130/*1416, 784*/), cv::Size2f(800, 800), i);
+
+    tm.reset();
+    tm.start();
+    d.init(src.cols, src.rows, roi, 1, 0, 3, 0, 3, -1, 50, 3, 0.8);
+    tm.stop();
+    ms = tm.getTimeMilli();
+    qDebug() << i << ": LineEdgeDectector::init " << ms << " ms";
+
+    tm.reset();
+    tm.start();
     //*cv::Mat m = */func(src, cv::RotatedRect(cv::Point2f(1840, 1130), cv::Size2f(800, 800), 5/*i*/), true, true, 3, 5, 0, 40.f);
-    //     std::stringstream ss;
-    //     ss << i << ".bmp";
-    //     cv::imwrite(ss.str(), m);
+    d.process(src);
+    tm.stop();
+    ms = tm.getTimeMilli();
+    qDebug() << i << ": LineEdgeDectector::process " << ms << " ms" << ", a = " << d._a << ", b = " << d._b << ", c" << d._c;
+
+    std::stringstream ss;
+    ss << i << ".bmp";
+    cv::imwrite(ss.str(), d.dst);
   }
-
-  LineEdgeDectector d;
-  cv::RotatedRect roi(cv::Point2f(1840, 1130), cv::Size2f(800, 800), 5);
-
-  tm.reset();
-  tm.start();
-  d.init(src.cols, src.rows, roi, 1, 0, 3, 0, 3, -1, 100, 3, 0.8);
-  tm.stop();
-  ms = tm.getTimeMilli();
-  qDebug() << "LineEdgeDectector::init " << ms << " ms";
-
-  tm.reset();
-  tm.start();
-  d.process(src);
-  tm.stop();
-  ms = tm.getTimeMilli();
-  qDebug() << "LineEdgeDectector::process " << ms << " ms";
 }

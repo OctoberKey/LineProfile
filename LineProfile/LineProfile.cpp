@@ -3,6 +3,8 @@
 #include <opencv2/opencv.hpp>
 #include <sstream>
 
+#include "ImageWindow.h"
+
 /*
 pt: 待旋转的点
 rotM: 旋转矩阵
@@ -583,7 +585,6 @@ public:
       }
     }
 
-    std::vector<cv::Point2f> pts;
     for (int row = 0; row < _peakIndex.rows; ++row)
     {
       int n = (int)(_peakIndex.ptr<cv::Vec3f>(row)[0][0] + 0.5);
@@ -633,12 +634,14 @@ public:
     {
       float a, b, c;
       weightedLineFit(pts, a, b, c, 3, 100);
-      float y1 = 0;
+      float y1 = -0.5;
       float x1 = (-c - b * y1) / a;
-      float y2 = src.rows - 1;
+      float y2 = src.rows - 1 + 0.5;
       float x2 = (-c - b * y2) / a;
+      pt1 = cv::Point2f(x1, y1);
+      pt2 = cv::Point2f(x2, y2);
 #ifndef NDEBUG
-      cv::line(dst, cv::Point2f(x1, y1), cv::Point2f(x2, y2), cv::Scalar(0, 255, 0, 128), 3);
+      cv::line(dst, pt1, pt2, cv::Scalar(0, 255, 0, 128), 3);
       _a = a;
       _b = b;
       _c = c;
@@ -649,6 +652,10 @@ public:
 #endif // !NDEBUG
   }
 
+  public:
+    std::vector<cv::Point2f> pts;
+    cv::Point2f pt1;
+    cv::Point2f pt2;
 protected:
   // 宽度
   int _widthImage;
@@ -938,10 +945,11 @@ LineProfile::LineProfile(QWidget* parent)
   double ms = tm.getTimeMilli();
   qDebug() << "cv::imread " << ms << " ms";
 
-  for (int i = 0; i < 360; ++i)
+  
+  LineEdgeDectector d;
+  for (int i = 0; i < 1; ++i)
   {
-    LineEdgeDectector d;
-    cv::RotatedRect roi(cv::Point2f(1840, 1130/*1416, 784*/), cv::Size2f(800, 800), i);
+    cv::RotatedRect roi(cv::Point2f(1840, 1130), cv::Size2f(800, 800), i);
 
     tm.reset();
     tm.start();
@@ -952,7 +960,7 @@ LineProfile::LineProfile(QWidget* parent)
 
     tm.reset();
     tm.start();
-    //*cv::Mat m = */func(src, cv::RotatedRect(cv::Point2f(1840, 1130), cv::Size2f(800, 800), 5/*i*/), true, true, 3, 5, 0, 40.f);
+    //cv::Mat m = func(src, cv::RotatedRect(cv::Point2f(1840, 1130), cv::Size2f(800, 800), 5/i/), true, true, 3, 5, 0, 40.f);
     d.process(src);
     tm.stop();
     ms = tm.getTimeMilli();
@@ -962,4 +970,92 @@ LineProfile::LineProfile(QWidget* parent)
     ss << i << ".bmp";
     cv::imwrite(ss.str(), d.dst);
   }
+
+
+  connect(ui.cmbTrendDirection, SIGNAL(currentIndexChanged(int)), SLOT(TrendDirectionChanged()));
+  connect(ui.cmbScanDirection, SIGNAL(currentIndexChanged(int)), SLOT(ScanDirectionChanged()));
+  connect(ui.cmbEdgeDirection, SIGNAL(currentIndexChanged(int)), SLOT(EdgeDirectionChanged()));
+  connect(ui.spbSpecifiedEdge, SIGNAL(valueChanged(const QString&)), SLOT(SpecifiedEdgeChanged()));
+  connect(ui.spbEdgeSensitivity, SIGNAL(valueChanged(const QString&)), SLOT(EdgeSensitivityChanged()));
+  connect(ui.spbEdgeFilterWidth, SIGNAL(valueChanged(const QString&)), SLOT(EdgeFilterWidthChanged()));
+  connect(ui.dsbEdgeIntensityUpperLimit, SIGNAL(valueChanged(const QString&)), SLOT(EdgeIntensityUpperLimitChanged()));
+  connect(ui.dsbEdgeIntensityLowerLimit, SIGNAL(valueChanged(const QString&)), SLOT(EdgeIntensityLowerLimtiChanged()));
+  connect(ui.spbSegmentSize, SIGNAL(valueChanged(const QString&)), SLOT(SegmentSizeChanged()));
+  connect(ui.dsbSegmentShift, SIGNAL(valueChanged(const QString&)), SLOT(SegmentShiftChanged()));
+  connect(ui.dsbSegmentOffset, SIGNAL(valueChanged(const QString&)), SLOT(SegmentOffsetChanged()));
+  connect(ui.cmbPrimaryTarget, SIGNAL(currentIndexChanged(int)), SLOT(PrimaryTargetChanged()));
+  connect(ui.spbPrimaryTargetSpecified, SIGNAL(valueChanged(const QString&)), SLOT(PrimaryTargetSpecifiedChanged()));
+  connect(ui.spbMaxNoSegments, SIGNAL(valueChanged(const QString&)), SLOT(MaxNoSegmentsChanged()));
+
+  _imageWindow = new sv::ImageWindow(this);
+  this->ui.scrollArea_2->setWidget(_imageWindow);
+
+  QImage img(R"(test.bmp)");
+  img = img.convertToFormat(QImage::Format_RGB32);
+  _imageWindow->setImage(img);
+
+  _imageWindow->setLine(QLineF(d.pt1.x, d.pt1.y, d.pt2.x, d.pt2.y).translated(QPointF(0.5, 0.5)));
+
+  QVector<QPointF> pts;
+  for (auto pt : d.pts)
+  {
+    pts.push_back(QPointF(pt.x, pt.y) + QPointF(0.5, 0.5));
+  }
+  _imageWindow->setPoints(pts);
+}
+
+void LineProfile::TrendDirectionChanged()
+{
+}
+
+void LineProfile::ScanDirectionChanged()
+{
+}
+
+void LineProfile::EdgeDirectionChanged()
+{
+}
+
+void LineProfile::SpecifiedEdgeChanged()
+{
+}
+
+void LineProfile::EdgeSensitivityChanged()
+{
+}
+
+void LineProfile::EdgeFilterWidthChanged()
+{
+}
+
+void LineProfile::EdgeIntensityUpperLimitChanged()
+{
+}
+
+void LineProfile::EdgeIntensityLowerLimtiChanged()
+{
+}
+
+void LineProfile::SegmentSizeChanged()
+{
+}
+
+void LineProfile::SegmentShiftChanged()
+{
+}
+
+void LineProfile::SegmentOffsetChanged()
+{
+}
+
+void LineProfile::PrimaryTargetChanged()
+{
+}
+
+void LineProfile::PrimaryTargetSpecifiedChanged()
+{
+}
+
+void LineProfile::MaxNoSegmentsChanged()
+{
 }

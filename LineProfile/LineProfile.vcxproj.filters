@@ -30,7 +30,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="main.cpp">
+    <ClCompile Include="Main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="stdafx.cpp">
@@ -44,9 +44,15 @@
     <ClInclude Include="stdafx.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="ProfilePosition.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="LineProfile.h">
+      <Filter>Header Files</Filter>
+    </QtMoc>
+    <QtMoc Include="ImageWindow.h">
       <Filter>Header Files</Filter>
     </QtMoc>
   </ItemGroup>
@@ -68,6 +74,9 @@
     <None Include="OpenCV4.props" />
   </ItemGroup>
   <ItemGroup>
-    <Image Include="5-.bmp" />
+    <Image Include="..\Bin\x64\test.bmp" />
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="C2A.txt" />
   </ItemGroup>
 </Project>

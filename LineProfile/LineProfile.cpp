@@ -4,6 +4,7 @@
 #include <sstream>
 
 #include "ImageWindow.h"
+#include "linefit.h"
 
 /*
 pt: 待旋转的点
@@ -595,7 +596,7 @@ public:
         pts.push_back(cv::Point2f(x, y));
       }
     }
-    /*
+    
     //参考https://blog.csdn.net/liyuanbhu/article/details/50866802
     cv::Vec4f lineFit;
     //cv::fitLine(pts, lineFit, 1, 0, 1e-2, 1e-2);
@@ -604,33 +605,42 @@ public:
     //cv::fitLine(pts, lineFit, 4, 0, 1e-2, 1e-2);
     //cv::fitLine(pts, lineFit, 5, 0, 1e-2, 1e-2);
     //cv::fitLine(pts, lineFit, 6, 0, 1e-2, 1e-2);
-    cv::fitLine(pts, lineFit, 7, 0, 1e-2, 1e-2);
+    //cv::fitLine(pts, lineFit, cv::DIST_WELSCH, 0, 0.01, 0.01);
+    //sv::fitLine(pts, lineFit, cv::DIST_HUBER, 0, 0.01, 0.01);
+    //sv::fitLine(pts, lineFit, sv::DIST_FAIR, 0, 0.01, 0.01);
+    sv::fitLine(pts, lineFit, sv::DIST_TUKEY, 1.5, 0.01, 0.01);
     {
-      float a = lineFit[1];
-      float b = -lineFit[0];
-      float c = lineFit[0] * lineFit[3] - lineFit[1] * lineFit[2];
+      _a = lineFit[1];
+      _b = -lineFit[0];
+      //_a = lineFit[0];
+      //_b = lineFit[1];
+      //_c = lineFit[0] * lineFit[3] - lineFit[1] * lineFit[2];
+      _c = -(_a * lineFit[2] + _b * lineFit[3]);
       // ax + by + c = 0
-      float y1 = 0;
-      float x1 = (-c - b * y1) / a;
-      float y2 = src.rows - 1;
-      float x2 = (-c - b * y2) / a;
+      float y1 = -0.5;
+      float x1 = (-_c - _b * y1) / _a;
+      float y2 = src.rows - 1 + 0.5;
+      float x2 = (-_c - _b * y2) / _a;
+      pt1 = cv::Point2f(x1, y1);
+      pt2 = cv::Point2f(x2, y2);
 #ifndef NDEBUG
-      cv::line(dst, cv::Point2f(x1, y1), cv::Point2f(x2, y2), cv::Scalar(255, 0, 0, 128));
+      cv::line(dst, pt1, pt2, cv::Scalar(255, 0, 0, 128));
 #endif // !NDEBUG
     }
 
-    {
-      double a, b, c;
-      ::lineFit(pts, a, b, c);
-      float y1 = 0;
-      float x1 = (-c - b * y1) / a;
-      float y2 = src.rows - 1;
-      float x2 = (-c - b * y2) / a;
+    //{
+    //  double a, b, c;
+    //  ::lineFit(pts, a, b, c);
+    //  float y1 = 0;
+    //  float x1 = (-c - b * y1) / a;
+    //  float y2 = src.rows - 1;
+    //  float x2 = (-c - b * y2) / a;
 #ifndef NDEBUG
-      cv::line(dst, cv::Point2f(x1, y1), cv::Point2f(x2, y2), cv::Scalar(0, 255, 0, 128));
+      //cv::line(dst, cv::Point2f(x1, y1), cv::Point2f(x2, y2), cv::Scalar(0, 255, 0, 128));
 #endif // !NDEBUG
-    }
-    */
+    //}
+    
+    /*
     {
       float a, b, c;
       weightedLineFit(pts, a, b, c, 3, 100);
@@ -647,6 +657,7 @@ public:
       _c = c;
 #endif // !NDEBUG
     }
+*/
 #ifndef NDEBUG
     //cv::imwrite("result.bmp", dst);
 #endif // !NDEBUG
@@ -945,15 +956,33 @@ LineProfile::LineProfile(QWidget* parent)
   double ms = tm.getTimeMilli();
   qDebug() << "cv::imread " << ms << " ms";
 
-  
+  _imageWindow = new sv::ImageWindow(this);
+
   LineEdgeDectector d;
   for (int i = 0; i < 1; ++i)
   {
-    cv::RotatedRect roi(cv::Point2f(1840, 1130), cv::Size2f(800, 800), i);
+    double t = i;
+    //cv::RotatedRect roi(cv::Point2f(1840, 1130), cv::Size2f(800, 800), t);
+    //cv::RotatedRect roi(cv::Point2f(1615, 791), cv::Size2f(400, 800), t);
+    cv::RotatedRect roi(cv::Point2f(1840, 972), cv::Size2f(400, 1600), t);
+    _imageWindow->setRoi(sv::QRotatedRectF(roi.center.x, roi.center.y, roi.size.width, roi.size.height, t));
 
     tm.reset();
     tm.start();
-    d.init(src.cols, src.rows, roi, 1, 0, 3, 0, 3, -1, 50, 3, 0.8);
+    d.init(src.cols,        // const int width,
+           src.rows,        // const int height,
+           roi,             // const cv::RotatedRect& roi,
+           1,               // const int traceDirection,
+           0,               // const int transitionDirection,
+           3,               // const int segmentWidth,
+           0,               // const int startOffset,
+           3,               // const int step,
+           -1,              // const int segmentCountMax,
+           75,              // const float threshold,
+           3,               // const int filterSize,
+           0.8              // const float filterSigma
+    );
+
     tm.stop();
     ms = tm.getTimeMilli();
     qDebug() << i << ": LineEdgeDectector::init " << ms << " ms";
@@ -987,18 +1016,19 @@ LineProfile::LineProfile(QWidget* parent)
   connect(ui.spbPrimaryTargetSpecified, SIGNAL(valueChanged(const QString&)), SLOT(PrimaryTargetSpecifiedChanged()));
   connect(ui.spbMaxNoSegments, SIGNAL(valueChanged(const QString&)), SLOT(MaxNoSegmentsChanged()));
 
-  _imageWindow = new sv::ImageWindow(this);
   this->ui.scrollArea_2->setWidget(_imageWindow);
 
   QImage img(R"(test.bmp)");
   img = img.convertToFormat(QImage::Format_RGB32);
   _imageWindow->setImage(img);
 
+  // Qt坐标系和OpenCV差0.5个像素
   _imageWindow->setLine(QLineF(d.pt1.x, d.pt1.y, d.pt2.x, d.pt2.y).translated(QPointF(0.5, 0.5)));
 
-  QVector<QPointF> pts;
+  QList<QPointF> pts;
   for (auto pt : d.pts)
   {
+    // Qt坐标系和OpenCV差0.5个像素
     pts.push_back(QPointF(pt.x, pt.y) + QPointF(0.5, 0.5));
   }
   _imageWindow->setPoints(pts);

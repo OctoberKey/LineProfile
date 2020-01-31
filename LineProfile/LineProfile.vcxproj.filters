@@ -47,6 +47,9 @@
     <ClInclude Include="ProfilePosition.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="linefit.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <QtMoc Include="LineProfile.h">

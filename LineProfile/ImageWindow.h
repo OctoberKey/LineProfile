@@ -20,7 +20,9 @@ public:
     , w(width)
     , h(height)
     , t(theta)
-  {}
+  {
+    createMatrix(xp, yp, t);
+  }
 
   QRotatedRectF(const QPointF& center, const QSize& size, qreal theta)
     : xp(center.x())
@@ -29,8 +31,7 @@ public:
     , h(size.height())
     , t(theta)
   {
-    _matrix.translate(xp, yp);
-    _matrix.rotate(t);
+    createMatrix(xp, yp, t);
   }
 
   QPointF topLeft    () const { return _matrix.map(shadowTopLeft    ()); }
@@ -38,7 +39,7 @@ public:
   QPointF topRight   () const { return _matrix.map(shadowTopRight   ()); }
   QPointF bottomLeft () const { return _matrix.map(shadowBottomLeft ()); }
 
-  QPointF center() const { return _matrix.map(shadowTopLeft()); }
+  QPointF center() const { return QPointF(xp, yp); }
 
 protected:
   QPointF shadowTopLeft    () const { return QPointF(center() + QPointF(-w / 2, -h / 2)); }
@@ -46,7 +47,18 @@ protected:
   QPointF shadowTopRight   () const { return QPointF(center() + QPointF(+w / 2, -h / 2)); }
   QPointF shadowBottomLeft () const { return QPointF(center() + QPointF(-w / 2, +h / 2)); }
 
-
+  void createMatrix(qreal x, qreal y, qreal t)
+  {
+    double a = qCos(qDegreesToRadians(t));
+    double b = -qSin(qDegreesToRadians(t));
+    double m11 = a;
+    double m12 = -b;
+    double m21 = b;
+    double m22 = a;
+    double m31 = (1 - a) * x - b * y;
+    double m32 = b * x + (1 - a) * y;
+    _matrix.setMatrix(m11, m12, m21, m22, m31, m32);
+  }
 private:
   qreal xp;
   qreal yp;
@@ -70,7 +82,7 @@ public:
     setFixedSize(_canvas.size() * _scale);
   }
 
-  void setPoints(const QVector<QPointF> pts)
+  void setPoints(const QList<QPointF> pts)
   {
     _points = pts;
   }
@@ -78,6 +90,11 @@ public:
   void setLine(const QLineF& line)
   {
     _line = line;
+  }
+
+  void setRoi(const QRotatedRectF& rect)
+  {
+    _roi = rect;
   }
 
 protected:
@@ -109,8 +126,9 @@ protected:
     qreal s = /*1 /*/ _scale;
     painter.scale(s, s);
 
-    painter.setPen(QPen(QColor(255, 215, 0), 2 / _scale));
-
+    painter.setPen(QPen(QColor(255, 215, 0), 0/*2 / _scale*/));
+    painter.setBrush(QBrush(QColor(255, 215, 0)));
+    /* draw cross
     for (auto& pt : _points)
     {
       painter.save();
@@ -124,6 +142,29 @@ protected:
       painter.drawLine(QPointF(0, -size / 2), QPointF(0, size / 2));
 
       painter.restore();
+    }
+
+    painter.restore();
+  }
+  */
+
+    for (int i = 0; i < _points.size(); i++)
+    {
+      painter.save();
+
+      QPointF pt = _points[i];
+      qreal size = _crossSize / s;
+
+      painter.setRenderHint(QPainter::Antialiasing);
+      painter.drawEllipse(pt, size, size);
+      painter.restore();
+
+      if (i > 0)
+      {
+        QPointF pt1 = _points[i - 1];
+        painter.drawLine(pt, pt1);
+      }
+
     }
 
     painter.restore();
@@ -144,15 +185,30 @@ protected:
   }
 
   void drawRoi(QPainter& painter)
-  {}
+  {
+    painter.save();
+
+    qreal s = /*1 /*/ _scale;
+    painter.scale(s, s);
+
+    painter.setPen(QPen(Qt::blue, 0));
+
+    QPolygonF polygon;
+    polygon << _roi.bottomLeft() << _roi.topLeft() << _roi.topRight() << _roi.bottomRight();
+    painter.drawPolygon(polygon, Qt::OddEvenFill);
+
+    painter.drawLine(_roi.center(), (_roi.bottomRight() + _roi.topRight()) / 2);
+
+    painter.restore();
+}
 
 private:
   QImage _canvas;
-  QVector<QPointF> _points;
+  QList<QPointF> _points;
   QLineF _line;
   QRotatedRectF _roi;
 
-  qreal _crossSize = 20;
+  qreal _crossSize = 2;
   qreal _scale = 25;
 };
 
